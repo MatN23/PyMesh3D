@@ -1,49 +1,220 @@
-# PyMesh3D: Transformer Library for 3D Mesh Processing
+# PyMesh3D Library Usage Guide
 
-A comprehensive PyTorch library that brings transformer architectures to 3D mesh data, enabling advanced geometric deep learning for computer vision and AI applications.
+Complete guide for using PyMesh3D - the transformer library for 3D mesh processing.
 
-## 🚀 Features
+## 📦 Installation
 
-- **Multiple Tokenization Strategies**: Vertex, face, and patch-based mesh tokenization
-- **3D-Aware Attention Mechanisms**: Geometric, graph, multi-scale, and sparse attention
-- **Adaptive Architecture**: Dynamically selects optimal attention types per layer
-- **Complete Training Pipeline**: End-to-end training with augmentation and validation
-- **Pre-training Tasks**: Masked mesh modeling, completion, and autoregressive generation
-- **Mesh Utilities**: Primitives generation, transformations, and I/O operations
-
-
-## 🛠️ Installation
-
+### Install from PyPI (Recommended)
 ```bash
-# Required dependencies
-pip install -r requirements.txt
+# Basic installation
+pip install pymesh3d
+
+# Full installation with all features
+pip install pymesh3d[full]
+
+# Development installation
+pip install pymesh3d[dev]
 ```
 
-## 🎯 Quick Start
+### Install from Source
+```bash
+git clone https://github.com/MatN23/PyMesh3D.git
+cd PyMesh3D
+pip install -e .
+```
 
-### Basic Mesh Classification
+### Installation Options
+- **Basic**: `pip install pymesh3d` - Core functionality only
+- **Full**: `pip install pymesh3d[full]` - Includes wandb, matplotlib, scipy, scikit-learn
+- **Dev**: `pip install pymesh3d[dev]` - Development tools (pytest, black, flake8, jupyter)
+- **Docs**: `pip install pymesh3d[docs]` - Documentation tools (sphinx, themes)
+
+## 🚀 Quick Start
+
+### 1. Basic Mesh Classification
 
 ```python
-from mesh_transformers import *
-from mesh_attention import *
+import torch
+import pymesh3d
+from pymesh3d import VertexTokenizer, MeshTransformer
+import numpy as np
 
-# Generate sample mesh
-mesh = MeshGenerator.sphere(radius=1.0, subdivisions=2)
-mesh.compute_vertex_normals()
+# Create sample mesh data (you'll need actual mesh data)
+# This is just for demonstration - replace with your mesh loading code
+class SimpleMesh:
+    def __init__(self):
+        # Create a simple triangle mesh
+        self.vertices = [
+            SimpleVertex([0.0, 0.0, 0.0], [0, 0, 1]),
+            SimpleVertex([1.0, 0.0, 0.0], [0, 0, 1]), 
+            SimpleVertex([0.5, 1.0, 0.0], [0, 0, 1])
+        ]
 
-# Initialize tokenizer and model
-tokenizer = VertexTokenizer(include_normals=True)
-model = MeshTransformer(feature_dim=6, d_model=256, nhead=8)
+class SimpleVertex:
+    def __init__(self, position, normal=None):
+        self.position = np.array(position, dtype=np.float32)
+        self.normal = np.array(normal, dtype=np.float32) if normal else None
 
-# Tokenize and classify
+# Load or create your mesh
+mesh = SimpleMesh()
+
+# Initialize tokenizer
+tokenizer = VertexTokenizer(
+    include_normals=True,
+    include_colors=False
+)
+
+# Create model
+model = MeshTransformer(
+    feature_dim=6,      # 3 position + 3 normal
+    d_model=256,
+    nhead=8,
+    num_layers=6
+)
+
+# Tokenize and process
 tokens = tokenizer.tokenize(mesh)
-output = model(tokens, task='classification')
+print(f"Generated {len(tokens)} tokens")
+
+# Run classification
+with torch.no_grad():
+    output = model(tokens, task='classification')
+    print(f"Classification output shape: {output.shape}")
 ```
 
-### Advanced Training Pipeline
+### 2. Advanced Model with Adaptive Attention
 
 ```python
-# Configuration
+from pymesh3d import AdaptiveMeshTransformer
+
+# Create adaptive model that switches attention mechanisms
+model = AdaptiveMeshTransformer(
+    d_model=512,
+    nhead=8,
+    num_layers=6,
+    dim_feedforward=2048,
+    dropout=0.1
+)
+
+# Prepare tensor inputs for adaptive model
+batch_size, seq_len = 1, len(tokens)
+features = torch.tensor([token.features for token in tokens]).unsqueeze(0)
+positions = torch.tensor([token.position for token in tokens]).unsqueeze(0)
+
+# Forward pass
+output = model(features, positions)
+print(f"Adaptive model output shape: {output.shape}")
+```
+
+## 🎯 Core Components
+
+### Tokenization Strategies
+
+#### Vertex Tokenizer
+```python
+from pymesh3d import VertexTokenizer
+
+# Basic vertex tokenization
+tokenizer = VertexTokenizer(
+    include_normals=True,
+    include_colors=True,
+    quantize_positions=False
+)
+
+tokens = tokenizer.tokenize(mesh)
+```
+
+#### Face Tokenizer  
+```python
+from pymesh3d import FaceTokenizer
+
+# Face-based tokenization
+face_tokenizer = FaceTokenizer(
+    max_face_vertices=4,
+    include_face_normal=True
+)
+
+face_tokens = face_tokenizer.tokenize(mesh)
+```
+
+#### Patch Tokenizer
+```python
+from pymesh3d import PatchTokenizer
+
+# Patch-based hierarchical tokenization
+patch_tokenizer = PatchTokenizer(
+    patch_size=16,
+    overlap=4,
+    feature_aggregation='mean'
+)
+
+patch_tokens = patch_tokenizer.tokenize(mesh)
+```
+
+### Attention Mechanisms
+
+#### Geometric Attention
+```python
+from pymesh3d import GeometricAttention
+
+# Distance-aware attention
+geo_attention = GeometricAttention(
+    d_model=256,
+    nhead=8,
+    max_distance=5.0,
+    distance_bins=32
+)
+```
+
+#### Graph Attention
+```python
+from pymesh3d import GraphAttention
+
+# Graph-based attention for mesh connectivity
+graph_attention = GraphAttention(
+    d_model=256,
+    nhead=8,
+    edge_dim=16
+)
+```
+
+#### Multi-Scale Attention
+```python
+from pymesh3d import MultiScaleAttention
+
+# Hierarchical multi-scale processing
+multiscale_attention = MultiScaleAttention(
+    d_model=256,
+    scales=[1, 2, 4, 8],
+    nhead=8
+)
+```
+
+#### Sparse Attention
+```python
+from pymesh3d import SparseAttention
+
+# Efficient attention for large meshes
+sparse_attention = SparseAttention(
+    d_model=256,
+    nhead=8,
+    neighborhood_size=16,
+    sparse_pattern='spatial'
+)
+```
+
+## 🏋️ Training Pipeline
+
+### Complete Training Setup
+
+```python
+from pymesh3d import (
+    MeshTransformerTrainingPipeline,
+    MeshTransformerDataset,
+    MeshAugmentation
+)
+
+# Training configuration
 config = {
     'model_type': 'adaptive',
     'tokenizer_type': 'vertex',
@@ -53,133 +224,265 @@ config = {
     'learning_rate': 1e-4,
     'batch_size': 16,
     'max_epochs': 100,
+    'early_stopping_patience': 15,
+    'device': 'cuda' if torch.cuda.is_available() else 'cpu',
+    'use_wandb': False,  # Set True for experiment tracking
     'task_type': 'classification'
 }
 
-# Initialize and train
+# Initialize training pipeline
 pipeline = MeshTransformerTrainingPipeline(config)
+
+# Prepare your dataset
+train_data = [
+    {'mesh': mesh1, 'label': 0, 'id': 'mesh_001'},
+    {'mesh': mesh2, 'label': 1, 'id': 'mesh_002'},
+    # ... more training data
+]
+
+val_data = [
+    {'mesh': val_mesh1, 'label': 0, 'id': 'val_001'},
+    # ... validation data
+]
+
+# Create datasets with augmentation
+train_dataset = MeshTransformerDataset(
+    train_data,
+    pipeline.tokenizer,
+    task_type='classification',
+    augmentation_fn=MeshAugmentation.random_augment,
+    max_seq_len=512
+)
+
+val_dataset = MeshTransformerDataset(
+    val_data,
+    pipeline.tokenizer,
+    task_type='classification',
+    max_seq_len=512
+)
+
+# Train the model
 pipeline.train(train_dataset, val_dataset)
 ```
 
-## 🔧 Core Components
-
-### Tokenization Strategies
-
-- **`VertexTokenizer`**: Treats each vertex as a token with position, normal, and color features
-- **`FaceTokenizer`**: Converts faces to tokens with connectivity and geometric properties
-- **`PatchTokenizer`**: Groups vertices into local patches for hierarchical processing
-
-### Attention Mechanisms
-
-- **`GeometricAttention`**: Distance-aware attention with geometric bias
-- **`GraphAttention`**: Graph neural network style attention for mesh connectivity
-- **`MultiScaleAttention`**: Hierarchical attention at multiple resolutions
-- **`SparseAttention`**: Efficient attention for large meshes using local neighborhoods
-- **`AdaptiveMeshTransformer`**: Dynamically switches attention types based on input
-
-### Model Architectures
-
-- **`MeshTransformer`**: Standard transformer with 3D positional encoding
-- **`AdaptiveMeshTransformer`**: Advanced model with multiple attention mechanisms
-- **`MeshTransformerLayer`**: Configurable transformer layer with mesh-aware attention
-
-## 🎨 Use Cases
-
-### 3D Shape Classification
-```python
-model = MeshTransformer(feature_dim=6, d_model=512)
-output = model(tokens, task='classification')
-```
-
-### Mesh Generation & Completion
-```python
-model = MeshTransformer(feature_dim=6, d_model=512)
-generated = model(partial_tokens, task='generation')
-```
-
-### Mesh Segmentation
-```python
-model = MeshTransformer(feature_dim=6, d_model=512)
-segment_labels = model(tokens, task='segmentation')
-```
-
-## 📊 Training Features
-
 ### Data Augmentation
+
 ```python
-# Automatic mesh augmentation
-augmented_mesh = MeshAugmentation.random_augment(mesh)
+from pymesh3d import MeshAugmentation
 
 # Individual augmentations
-rotated = MeshAugmentation.random_rotation(mesh)
-scaled = MeshAugmentation.random_scale(mesh)
-noisy = MeshAugmentation.add_noise(mesh)
+rotated_mesh = MeshAugmentation.random_rotation(mesh, angle_range=30.0)
+scaled_mesh = MeshAugmentation.random_scale(mesh, scale_range=(0.8, 1.2))
+translated_mesh = MeshAugmentation.random_translation(mesh, translation_range=0.1)
+noisy_mesh = MeshAugmentation.add_noise(mesh, noise_std=0.01)
+
+# Combined random augmentation
+augmented_mesh = MeshAugmentation.random_augment(mesh)
 ```
 
-### Pre-training Tasks
+## 🎨 Use Cases & Applications
+
+### 3D Shape Classification
+
 ```python
+# Configure for classification
+config = {
+    'model_type': 'standard',
+    'task_type': 'classification',
+    'feature_dim': 6,  # Position + Normal
+    'd_model': 512,
+    'num_layers': 8
+}
+
+pipeline = MeshTransformerTrainingPipeline(config)
+
+# Your mesh dataset with labels
+mesh_classes = ['chair', 'table', 'lamp', 'sofa']
+# Train classifier...
+```
+
+### Mesh Reconstruction/Autoencoder
+
+```python
+# Configure for reconstruction
+config = {
+    'model_type': 'standard',
+    'task_type': 'reconstruction',
+    'feature_dim': 6,
+    'd_model': 512,
+    'learning_rate': 1e-5,
+    'max_epochs': 200
+}
+
+pipeline = MeshTransformerTrainingPipeline(config)
+
+# Train autoencoder for mesh compression/denoising
+model = pipeline.model
+with torch.no_grad():
+    reconstructed = model(tokens, task='reconstruction')
+```
+
+### Mesh Generation
+
+```python
+# Configure for generation
+config = {
+    'model_type': 'adaptive',
+    'task_type': 'generation',
+    'd_model': 768,
+    'num_layers': 12
+}
+
+# Pre-training tasks
+from pymesh3d import MeshTransformerPreTrainer
+
 trainer = MeshTransformerPreTrainer(model, tokenizer)
 
 # Masked mesh modeling
-masked_input, positions, targets = trainer.masked_mesh_modeling(tokens)
+masked_input, positions, targets = trainer.masked_mesh_modeling(tokens, mask_ratio=0.15)
 
 # Mesh completion
 partial_input, complete_target = trainer.mesh_completion_task(partial_tokens, complete_tokens)
 ```
 
-## 🔬 Advanced Features
+## 🔧 Advanced Features
+
+### Custom Attention Mechanisms
+
+```python
+from pymesh3d import MeshTransformerLayer
+
+# Create custom transformer layers
+custom_layer = MeshTransformerLayer(
+    d_model=256,
+    nhead=8,
+    attention_type='geometric'  # or 'graph', 'multiscale', 'sparse'
+)
+```
 
 ### 3D Positional Encoding
-- Sinusoidal encoding for 3D coordinates
-- Frequency-based spatial embeddings
-- Supports both local and global positional information
 
-### Sparse Processing
-- Efficient handling of large meshes (1000+ vertices)
-- Neighborhood-based sparse attention
-- Configurable sparsity patterns
+```python
+from pymesh3d import MeshPositionalEncoding
 
-### Multi-Scale Processing
-- Hierarchical mesh analysis
-- Multiple resolution attention
-- Adaptive scale selection
+# Custom 3D positional encoding
+pos_encoding = MeshPositionalEncoding(
+    d_model=256,
+    max_freq=10.0,
+    num_freq_bands=10
+)
 
-## 📈 Performance
+# Apply to 3D positions
+positions = torch.randn(batch_size, seq_len, 3)
+pos_embeddings = pos_encoding(positions)
+```
 
-- **Memory Efficient**: Sparse attention reduces memory complexity
-- **Scalable**: Handles meshes from 100 to 10,000+ vertices
-- **Fast Training**: Optimized batching and caching
-- **GPU Accelerated**: Full CUDA support
+### Model Checkpointing
+
+```python
+# Save model checkpoint
+pipeline.save_checkpoint('my_model_epoch_50.pth')
+
+# Load checkpoint
+pipeline.load_checkpoint('my_model_epoch_50.pth')
+
+# Save just the model state
+torch.save(pipeline.model.state_dict(), 'model_weights.pth')
+```
+
+## 📊 Monitoring & Logging
+
+### WandB Integration
+
+```python
+# Enable WandB logging
+config = {
+    'use_wandb': True,
+    'wandb_project': 'mesh-transformer-experiments',
+    # ... other config
+}
+
+# Your training will automatically log to WandB
+pipeline = MeshTransformerTrainingPipeline(config)
+```
+
+### Custom Metrics
+
+```python
+# Track custom metrics during training
+def compute_custom_metrics(predictions, targets):
+    # Your custom metric computation
+    return {'custom_accuracy': accuracy, 'custom_f1': f1_score}
+
+# Extend the training pipeline with custom metrics
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **Memory Issues with Large Meshes**
+```python
+# Use sparse attention for large meshes
+model = MeshTransformer(
+    feature_dim=6,
+    d_model=256,
+    # ... other params
+)
+
+# Or chunk your processing
+def process_large_mesh(mesh, chunk_size=1000):
+    tokens = tokenizer.tokenize(mesh)
+    results = []
+    for i in range(0, len(tokens), chunk_size):
+        chunk = tokens[i:i+chunk_size]
+        result = model(chunk)
+        results.append(result)
+    return torch.cat(results, dim=0)
+```
+
+2. **GPU Memory Management**
+```python
+# Clear cache between batches
+torch.cuda.empty_cache()
+
+# Use mixed precision training
+config['use_amp'] = True  # If implemented
+```
+
+3. **Custom Mesh Loading**
+```python
+# Implement your own mesh class compatible with tokenizers
+class CustomMesh:
+    def __init__(self, vertices, faces=None):
+        self.vertices = [CustomVertex(v) for v in vertices]
+        self.faces = faces
+        
+class CustomVertex:
+    def __init__(self, position, normal=None, color=None):
+        self.position = np.array(position, dtype=np.float32)
+        self.normal = np.array(normal, dtype=np.float32) if normal else None
+        self.color = np.array(color, dtype=np.float32) if color else None
+```
+
+## 📚 Examples & Tutorials
+
+Check the library's `examples/` directory for:
+- Basic classification tutorial
+- Mesh autoencoder training
+- Custom tokenizer implementation
+- Advanced attention mechanism usage
+- Large-scale training pipelines
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Inspired by advances in geometric deep learning and transformer architectures
-- Built on PyTorch framework
-- Thanks to the 3D computer vision and AI research community
-
-## 📚 Citation
-
-```bibtex
-@software{meshnet2024,
-  title={MeshNet: Transformer Library for 3D Mesh Processing},
-  author={Your Name},
-  year={2024},
-  url={https://github.com/yourusername/meshnet}
-}
-```
+The library is actively developed! Contribute by:
+1. Reporting issues on GitHub
+2. Submitting pull requests
+3. Adding new attention mechanisms
+4. Improving documentation
+5. Creating examples and tutorials
 
 ---
 
-**Made with ❤️ for the 3D AI community**
+**Happy mesh processing with PyMesh3D! 🎉**
