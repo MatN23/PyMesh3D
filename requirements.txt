@@ -1,0 +1,20 @@
+# Core dependencies
+torch>=2.0.0
+numpy>=1.21.0
+tqdm>=4.64.0
+
+# Optional dependencies for enhanced functionality
+wandb>=0.15.0              # Experiment tracking and logging
+matplotlib>=3.5.0          # Visualization
+scipy>=1.9.0               # Scientific computing
+scikit-learn>=1.1.0        # Machine learning utilities
+
+# Development and testing (optional)
+pytest>=7.0.0              # Testing framework
+black>=22.0.0              # Code formatting
+flake8>=5.0.0              # Linting
+jupyter>=1.0.0             # Notebooks for examples
+
+# Documentation (optional)
+sphinx>=5.0.0              # Documentation generation
+sphinx-rtd-theme>=1.0.0    # Documentation theme
