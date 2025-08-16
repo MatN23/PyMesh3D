@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Matias Nielsen. All rights reserved.
+# Licensed under the Custom License below.
+
 import numpy as np
 import torch
 from typing import List, Dict, Tuple, Optional, Union

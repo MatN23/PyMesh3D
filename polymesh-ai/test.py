@@ -1,8 +1,6 @@
-#!/usr/bin/env python3
-"""
-Complete demonstration and testing suite for the Mesh Transformers Library
-Includes practical examples, benchmarks, and visualization utilities
-"""
+# Copyright (c) 2025 Matias Nielsen. All rights reserved.
+# Licensed under the Custom License below.
+
 
 import numpy as np
 import torch

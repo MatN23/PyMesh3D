@@ -1,9 +1,5 @@
-"""
-Mesh Transformers Library
-
-A comprehensive library for processing 3D meshes using transformer architectures.
-Includes tokenization strategies, attention mechanisms, training pipelines, and utilities.
-"""
+# Copyright (c) 2025 Matias Nielsen. All rights reserved.
+# Licensed under the Custom License below.
 
 __version__ = "0.3.4"
 __author__ = "Matias Nielsen"

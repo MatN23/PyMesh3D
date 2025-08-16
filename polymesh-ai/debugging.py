@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
-"""
-Debug script to diagnose polymesh_ai import issues
-"""
+# Copyright (c) 2025 Matias Nielsen. All rights reserved.
+# Licensed under the Custom License below.
 
 import sys
 import os
