@@ -1,9 +1,0 @@
-LICENSE
-README.md
-pyproject.toml
-setup.py
-pymesh3d.egg-info/PKG-INFO
-pymesh3d.egg-info/SOURCES.txt
-pymesh3d.egg-info/dependency_links.txt
-pymesh3d.egg-info/requires.txt
-pymesh3d.egg-info/top_level.txt

@@ -1,0 +1,8 @@
+LICENSE
+README.md
+pyproject.toml
+polymesh_ai.egg-info/PKG-INFO
+polymesh_ai.egg-info/SOURCES.txt
+polymesh_ai.egg-info/dependency_links.txt
+polymesh_ai.egg-info/requires.txt
+polymesh_ai.egg-info/top_level.txt

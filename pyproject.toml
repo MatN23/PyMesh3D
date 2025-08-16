@@ -3,25 +3,26 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pymesh3d"
-version = "0.1.0"
+name = "polymesh-ai"
+version = "0.2.0"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"},
+    {name = "Matias Nielsen", email = "matiasnhmb@gmail.com"},
 ]
 description = "Transformer Library for 3D Mesh Processing"
 readme = "README.md"
 requires-python = ">=3.8"
+license = {text = "MIT"}
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 keywords = ["3d", "mesh", "transformer", "deep-learning", "pytorch", "computer-vision"]
 dependencies = [
@@ -42,6 +43,8 @@ dev = [
     "black>=22.0.0",
     "flake8>=5.0.0",
     "jupyter>=1.0.0",
+    "build>=0.10.0",
+    "twine>=4.0.0",
 ]
 docs = [
     "sphinx>=5.0.0",
@@ -49,10 +52,10 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/pymesh3d"
-Repository = "https://github.com/yourusername/pymesh3d"
+Homepage = "https://github.com/MatN23/pymesh3d"
+Repository = "https://github.com/MatN23/pymesh3d"
 Documentation = "https://pymesh3d.readthedocs.io/"
-"Bug Tracker" = "https://github.com/yourusername/pymesh3d/issues"
+"Bug Tracker" = "https://github.com/MatN23/pymesh3d/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -66,3 +69,7 @@ target-version = ['py38']
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
+
+# PyPI publishing configuration
+[tool.twine]
+repository = "pypi"
