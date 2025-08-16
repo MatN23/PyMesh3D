@@ -1,4 +1,4 @@
-# PyMesh3D Library Usage Guide
+# polymesh-ai Library Usage Guide
 
 Complete guide for using PyMesh3D - the transformer library for 3D mesh processing.
 
@@ -7,27 +7,27 @@ Complete guide for using PyMesh3D - the transformer library for 3D mesh processi
 ### Install from PyPI (Recommended)
 ```bash
 # Basic installation
-pip install pymesh3d
+pip install polymesh-ai
 
 # Full installation with all features
-pip install pymesh3d[full]
+pip install polymesh-ai[full]
 
 # Development installation
-pip install pymesh3d[dev]
+pip install polymesh-ai[dev]
 ```
 
 ### Install from Source
 ```bash
-git clone https://github.com/MatN23/PyMesh3D.git
-cd PyMesh3D
+git clone https://github.com/MatN23/polymesh-ai.git
+cd polymesh-ai
 pip install -e .
 ```
 
 ### Installation Options
-- **Basic**: `pip install pymesh3d` - Core functionality only
-- **Full**: `pip install pymesh3d[full]` - Includes wandb, matplotlib, scipy, scikit-learn
-- **Dev**: `pip install pymesh3d[dev]` - Development tools (pytest, black, flake8, jupyter)
-- **Docs**: `pip install pymesh3d[docs]` - Documentation tools (sphinx, themes)
+- **Basic**: `pip install polymesh-ai` - Core functionality only
+- **Full**: `pip install polymesh-ai[full]` - Includes wandb, matplotlib, scipy, scikit-learn
+- **Dev**: `pip install polymesh-ai[dev]` - Development tools (pytest, black, flake8, jupyter)
+- **Docs**: `pip install polymesh-ai[docs]` - Documentation tools (sphinx, themes)
 
 ## 🚀 Quick Start
 
@@ -35,8 +35,8 @@ pip install -e .
 
 ```python
 import torch
-import pymesh3d
-from pymesh3d import VertexTokenizer, MeshTransformer
+import polymesh-ai
+from polymesh-ai import VertexTokenizer, MeshTransformer
 import numpy as np
 
 # Create sample mesh data (you'll need actual mesh data)
@@ -85,7 +85,7 @@ with torch.no_grad():
 ### 2. Advanced Model with Adaptive Attention
 
 ```python
-from pymesh3d import AdaptiveMeshTransformer
+from polymesh-ai import AdaptiveMeshTransformer
 
 # Create adaptive model that switches attention mechanisms
 model = AdaptiveMeshTransformer(
@@ -112,7 +112,7 @@ print(f"Adaptive model output shape: {output.shape}")
 
 #### Vertex Tokenizer
 ```python
-from pymesh3d import VertexTokenizer
+from polymesh-ai import VertexTokenizer
 
 # Basic vertex tokenization
 tokenizer = VertexTokenizer(
@@ -126,7 +126,7 @@ tokens = tokenizer.tokenize(mesh)
 
 #### Face Tokenizer  
 ```python
-from pymesh3d import FaceTokenizer
+from polymesh-ai import FaceTokenizer
 
 # Face-based tokenization
 face_tokenizer = FaceTokenizer(
@@ -139,7 +139,7 @@ face_tokens = face_tokenizer.tokenize(mesh)
 
 #### Patch Tokenizer
 ```python
-from pymesh3d import PatchTokenizer
+from polymesh-ai import PatchTokenizer
 
 # Patch-based hierarchical tokenization
 patch_tokenizer = PatchTokenizer(
@@ -155,7 +155,7 @@ patch_tokens = patch_tokenizer.tokenize(mesh)
 
 #### Geometric Attention
 ```python
-from pymesh3d import GeometricAttention
+from polymesh-ai import GeometricAttention
 
 # Distance-aware attention
 geo_attention = GeometricAttention(
@@ -168,7 +168,7 @@ geo_attention = GeometricAttention(
 
 #### Graph Attention
 ```python
-from pymesh3d import GraphAttention
+from polymesh-ai import GraphAttention
 
 # Graph-based attention for mesh connectivity
 graph_attention = GraphAttention(
@@ -180,7 +180,7 @@ graph_attention = GraphAttention(
 
 #### Multi-Scale Attention
 ```python
-from pymesh3d import MultiScaleAttention
+from polymesh-ai import MultiScaleAttention
 
 # Hierarchical multi-scale processing
 multiscale_attention = MultiScaleAttention(
@@ -192,7 +192,7 @@ multiscale_attention = MultiScaleAttention(
 
 #### Sparse Attention
 ```python
-from pymesh3d import SparseAttention
+from polymesh-ai import SparseAttention
 
 # Efficient attention for large meshes
 sparse_attention = SparseAttention(
@@ -208,7 +208,7 @@ sparse_attention = SparseAttention(
 ### Complete Training Setup
 
 ```python
-from pymesh3d import (
+from polymesh-ai import (
     MeshTransformerTrainingPipeline,
     MeshTransformerDataset,
     MeshAugmentation
@@ -268,7 +268,7 @@ pipeline.train(train_dataset, val_dataset)
 ### Data Augmentation
 
 ```python
-from pymesh3d import MeshAugmentation
+from polymesh-ai import MeshAugmentation
 
 # Individual augmentations
 rotated_mesh = MeshAugmentation.random_rotation(mesh, angle_range=30.0)
@@ -334,7 +334,7 @@ config = {
 }
 
 # Pre-training tasks
-from pymesh3d import MeshTransformerPreTrainer
+from polymesh-ai import MeshTransformerPreTrainer
 
 trainer = MeshTransformerPreTrainer(model, tokenizer)
 
@@ -350,7 +350,7 @@ partial_input, complete_target = trainer.mesh_completion_task(partial_tokens, co
 ### Custom Attention Mechanisms
 
 ```python
-from pymesh3d import MeshTransformerLayer
+from polymesh-ai import MeshTransformerLayer
 
 # Create custom transformer layers
 custom_layer = MeshTransformerLayer(
@@ -363,7 +363,7 @@ custom_layer = MeshTransformerLayer(
 ### 3D Positional Encoding
 
 ```python
-from pymesh3d import MeshPositionalEncoding
+from polymesh-ai import MeshPositionalEncoding
 
 # Custom 3D positional encoding
 pos_encoding = MeshPositionalEncoding(
