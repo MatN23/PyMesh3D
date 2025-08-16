@@ -3,15 +3,15 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "polymesh-ai"
-version = "0.2.0"
+name = "polymesh_ai"
+version = "0.3.4"  # Increment version for new release
 authors = [
     {name = "Matias Nielsen", email = "matiasnhmb@gmail.com"},
 ]
 description = "Transformer Library for 3D Mesh Processing"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {text = "MIT"}
+license = "MIT"  # Fixed: Use simple string instead of table
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -59,7 +59,7 @@ Documentation = "https://pymesh3d.readthedocs.io/"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["pymesh3d*"]
+include = ["polymesh_ai*"]  # Fixed: Changed from "pymesh3d*" to "polymesh_ai*"
 
 [tool.black]
 line-length = 88
