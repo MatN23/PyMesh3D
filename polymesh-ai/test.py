@@ -1,606 +1,536 @@
-# Copyright (c) 2025 Matias Nielsen. All rights reserved.
-# Licensed under the Custom License below.
+# complete_training_example.py
+# A complete working example for training mesh transformers
 
-
-import numpy as np
 import torch
 import torch.nn as nn
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import time
-import json
-from pathlib import Path
-from typing import List, Dict, Tuple, Optional
-import warnings
-warnings.filterwarnings('ignore')
+import numpy as np
+from tqdm import tqdm
+import os
+from typing import List, Dict
 
-# Import your library modules (assuming they're in the same directory)
-from mesh_library import Vertex, Face, Mesh, MeshGenerator, MeshLoader, MeshDataset
-from mesh_transformers import (MeshToken, VertexTokenizer, FaceTokenizer, PatchTokenizer, 
-                               MeshPositionalEncoding, MeshTransformerEmbedding, MeshTransformer)
-from mesh_attention import (GeometricAttention, GraphAttention, MultiScaleAttention, 
-                           SparseAttention, AdaptiveMeshTransformer)
-from mesh_training_pipeline import MeshTransformerDataset, MeshAugmentation, train_mesh_classifier
+# Import your existing modules
+from mesh_library import MeshGenerator, Mesh
+from mesh_transformers import (
+    MeshTransformer, AdaptiveMeshTransformer, VertexTokenizer,
+    create_mesh_classifier, create_adaptive_classifier
+)
 
-class MeshTransformersDemo:
-    """Complete demonstration suite for mesh transformers"""
+class SimpleMeshDataset:
+    """Simplified dataset for testing"""
     
-    def __init__(self):
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(f"Using device: {self.device}")
-        self.results = {}
-    
-    def generate_sample_meshes(self, n_samples: int = 10) -> Dict[str, List[Mesh]]:
-        """Generate diverse sample meshes for testing"""
-        print("\n🔧 Generating Sample Meshes...")
+    def __init__(self, num_samples_per_class: int = 100, num_classes: int = 3):
+        self.data = []
+        self.tokenizer = VertexTokenizer(include_normals=True, include_colors=False)
         
-        meshes = {
-            'cubes': [],
-            'spheres': [],
-            'cylinders': [],
-            'planes': []
+        print(f"Generating dataset with {num_samples_per_class} samples per class...")
+        
+        # Generate different mesh types
+        mesh_generators = {
+            0: lambda: MeshGenerator.cube(size=np.random.uniform(0.5, 2.0)),
+            1: lambda: MeshGenerator.sphere(radius=np.random.uniform(0.5, 1.5), 
+                                         subdivisions=np.random.randint(1, 3)),
+            2: lambda: MeshGenerator.cylinder(radius=np.random.uniform(0.5, 1.2),
+                                            height=np.random.uniform(1.0, 3.0))
         }
         
-        for i in range(n_samples):
-            # Generate cubes with varying sizes
-            cube = MeshGenerator.cube(size=np.random.uniform(0.5, 2.0))
-            cube.normalize().compute_vertex_normals()
-            cube.name = f"cube_{i}"
-            meshes['cubes'].append(cube)
-            
-            # Generate spheres with varying subdivisions
-            sphere = MeshGenerator.sphere(
-                radius=np.random.uniform(0.8, 1.5),
-                subdivisions=np.random.randint(1, 3)
-            )
-            sphere.normalize().compute_vertex_normals()
-            sphere.name = f"sphere_{i}"
-            meshes['spheres'].append(sphere)
-            
-            # Generate cylinders with varying proportions
-            cylinder = MeshGenerator.cylinder(
-                radius=np.random.uniform(0.5, 1.2),
-                height=np.random.uniform(1.0, 3.0),
-                segments=np.random.randint(8, 32)
-            )
-            cylinder.normalize().compute_vertex_normals()
-            cylinder.name = f"cylinder_{i}"
-            meshes['cylinders'].append(cylinder)
-            
-            # Generate planes with varying subdivisions
-            plane = MeshGenerator.plane(
-                width=np.random.uniform(1.0, 3.0),
-                height=np.random.uniform(1.0, 3.0),
-                width_segments=np.random.randint(1, 4),
-                height_segments=np.random.randint(1, 4)
-            )
-            plane.normalize().compute_vertex_normals()
-            plane.name = f"plane_{i}"
-            meshes['planes'].append(plane)
-        
-        total_meshes = sum(len(mesh_list) for mesh_list in meshes.values())
-        print(f"✅ Generated {total_meshes} sample meshes")
-        
-        return meshes
-    
-    def test_tokenization_strategies(self, meshes: Dict[str, List[Mesh]]):
-        """Test different tokenization strategies"""
-        print("\n🔍 Testing Tokenization Strategies...")
-        
-        # Get a sample mesh
-        test_mesh = meshes['spheres'][0]
-        print(f"Testing with mesh: {test_mesh}")
-        
-        tokenizers = {
-            'vertex': VertexTokenizer(include_normals=True, include_colors=False),
-            'face': FaceTokenizer(max_face_vertices=4, include_face_normal=True),
-            'patch': PatchTokenizer(patch_size=8, overlap=2)
-        }
-        
-        tokenization_results = {}
-        
-        for name, tokenizer in tokenizers.items():
-            start_time = time.time()
-            tokens = tokenizer.tokenize(test_mesh)
-            tokenization_time = time.time() - start_time
-            
-            if tokens:
-                avg_feature_dim = np.mean([len(token.features) for token in tokens])
-                token_positions = np.array([token.position for token in tokens])
-                position_variance = np.var(token_positions, axis=0)
-            else:
-                avg_feature_dim = 0
-                position_variance = np.zeros(3)
-            
-            tokenization_results[name] = {
-                'num_tokens': len(tokens),
-                'avg_feature_dim': avg_feature_dim,
-                'tokenization_time': tokenization_time,
-                'position_variance': position_variance,
-                'sample_token': tokens[0] if tokens else None
-            }
-            
-            print(f"  {name.upper()}: {len(tokens)} tokens, "
-                  f"avg feature dim: {avg_feature_dim:.1f}, "
-                  f"time: {tokenization_time:.4f}s")
-        
-        self.results['tokenization'] = tokenization_results
-        return tokenization_results
-    
-    def test_attention_mechanisms(self):
-        """Test different attention mechanisms"""
-        print("\n⚡ Testing Attention Mechanisms...")
-        
-        # Create sample data
-        batch_size, seq_len, d_model = 2, 64, 256
-        x = torch.randn(batch_size, seq_len, d_model)
-        positions = torch.randn(batch_size, seq_len, 3)
-        
-        attention_mechanisms = {
-            'geometric': GeometricAttention(d_model, nhead=8),
-            'multiscale': MultiScaleAttention(d_model, scales=[1, 2, 4]),
-            'sparse': SparseAttention(d_model, nhead=8, neighborhood_size=16)
-        }
-        
-        attention_results = {}
-        
-        for name, attention in attention_mechanisms.items():
-            attention.to(self.device)
-            x_device = x.to(self.device)
-            positions_device = positions.to(self.device)
-            
-            # Measure inference time
-            start_time = time.time()
-            with torch.no_grad():
-                if name == 'geometric':
-                    output = attention(x_device, x_device, x_device, positions_device)
-                else:
-                    output = attention(x_device, positions_device)
-            inference_time = time.time() - start_time
-            
-            # Calculate memory usage (parameters)
-            num_params = sum(p.numel() for p in attention.parameters())
-            
-            attention_results[name] = {
-                'output_shape': tuple(output.shape),
-                'inference_time': inference_time,
-                'num_parameters': num_params,
-                'output_mean': output.mean().item(),
-                'output_std': output.std().item()
-            }
-            
-            print(f"  {name.upper()}: {tuple(output.shape)}, "
-                  f"params: {num_params:,}, time: {inference_time:.4f}s")
-        
-        self.results['attention'] = attention_results
-        return attention_results
-    
-    def test_model_architectures(self):
-        """Test different model architectures"""
-        print("\n🏗️ Testing Model Architectures...")
-        
-        models = {
-            'standard': MeshTransformer(
-                feature_dim=6, d_model=256, nhead=8, num_layers=4
-            ),
-            'adaptive': AdaptiveMeshTransformer(
-                d_model=256, nhead=8, num_layers=4
-            )
-        }
-        
-        model_results = {}
-        
-        for name, model in models.items():
-            model.to(self.device)
-            
-            # Count parameters
-            num_params = sum(p.numel() for p in model.parameters())
-            
-            # Test forward pass
-            if name == 'standard':
-                # Create sample tokens
-                sample_tokens = []
-                for i in range(32):
-                    token = MeshToken(
-                        token_id=i,
-                        features=np.random.randn(6).astype(np.float32),
-                        position=np.random.randn(3).astype(np.float32),
-                        token_type='vertex'
-                    )
-                    sample_tokens.append(token)
-                
-                start_time = time.time()
-                with torch.no_grad():
-                    output = model(sample_tokens, task='classification')
-                inference_time = time.time() - start_time
-                
-            else:  # adaptive
-                x = torch.randn(1, 32, 256).to(self.device)
-                positions = torch.randn(1, 32, 3).to(self.device)
-                
-                start_time = time.time()
-                with torch.no_grad():
-                    output = model(x, positions)
-                inference_time = time.time() - start_time
-            
-            model_results[name] = {
-                'num_parameters': num_params,
-                'output_shape': tuple(output.shape),
-                'inference_time': inference_time,
-                'memory_mb': num_params * 4 / (1024 * 1024)  # Rough estimate
-            }
-            
-            print(f"  {name.upper()}: {num_params:,} params, "
-                  f"output: {tuple(output.shape)}, time: {inference_time:.4f}s")
-        
-        self.results['models'] = model_results
-        return model_results
-    
-    def test_mesh_augmentation(self, meshes: Dict[str, List[Mesh]]):
-        """Test mesh augmentation techniques"""
-        print("\n🔄 Testing Mesh Augmentation...")
-        
-        test_mesh = meshes['cubes'][0].copy()
-        original_vertices = len(test_mesh.vertices)
-        original_center = test_mesh.get_center().copy()
-        original_scale = test_mesh.get_scale()
-        
-        augmentations = {
-            'rotation': lambda m: MeshAugmentation.random_rotation(m, angle_range=45),
-            'scaling': lambda m: MeshAugmentation.random_scale(m, scale_range=(0.7, 1.3)),
-            'translation': lambda m: MeshAugmentation.random_translation(m, translation_range=0.2),
-            'noise': lambda m: MeshAugmentation.add_noise(m, noise_std=0.02),
-            'combined': lambda m: MeshAugmentation.random_augment(m)
-        }
-        
-        augmentation_results = {}
-        
-        for name, aug_fn in augmentations.items():
-            test_mesh_copy = test_mesh.copy()
-            
-            start_time = time.time()
-            augmented_mesh = aug_fn(test_mesh_copy)
-            aug_time = time.time() - start_time
-            
-            new_center = augmented_mesh.get_center()
-            new_scale = augmented_mesh.get_scale()
-            center_change = np.linalg.norm(new_center - original_center)
-            scale_change = abs(new_scale - original_scale) / original_scale
-            
-            augmentation_results[name] = {
-                'vertices_preserved': len(augmented_mesh.vertices) == original_vertices,
-                'center_change': center_change,
-                'scale_change': scale_change,
-                'augmentation_time': aug_time
-            }
-            
-            print(f"  {name.upper()}: center Δ={center_change:.3f}, "
-                  f"scale Δ={scale_change:.3f}, time={aug_time:.4f}s")
-        
-        self.results['augmentation'] = augmentation_results
-        return augmentation_results
-    
-    def benchmark_performance(self, meshes: Dict[str, List[Mesh]]):
-        """Benchmark model performance on different mesh sizes"""
-        print("\n⚡ Benchmarking Performance...")
-        
-        # Test with different mesh complexities
-        test_meshes = [
-            meshes['cubes'][0],      # Simple
-            meshes['spheres'][1],    # Medium
-            meshes['cylinders'][0]   # Complex (more vertices)
-        ]
-        
-        tokenizer = VertexTokenizer(include_normals=True)
-        model = MeshTransformer(feature_dim=6, d_model=256, nhead=8, num_layers=4)
-        model.to(self.device)
-        
-        benchmark_results = []
-        
-        for i, mesh in enumerate(test_meshes):
-            tokens = tokenizer.tokenize(mesh)
-            complexity = len(tokens)
-            
-            # Warm-up run
-            with torch.no_grad():
-                _ = model(tokens, task='classification')
-            
-            # Timed runs
-            times = []
-            for _ in range(5):
-                start_time = time.time()
-                with torch.no_grad():
-                    output = model(tokens, task='classification')
-                times.append(time.time() - start_time)
-            
-            avg_time = np.mean(times)
-            std_time = np.std(times)
-            throughput = complexity / avg_time  # tokens per second
-            
-            result = {
-                'mesh_name': mesh.name,
-                'complexity': complexity,
-                'avg_time': avg_time,
-                'std_time': std_time,
-                'throughput': throughput,
-                'output_shape': tuple(output.shape)
-            }
-            benchmark_results.append(result)
-            
-            print(f"  {mesh.name}: {complexity} tokens, "
-                  f"{avg_time:.4f}±{std_time:.4f}s, "
-                  f"{throughput:.1f} tokens/s")
-        
-        self.results['benchmark'] = benchmark_results
-        return benchmark_results
-    
-    def visualize_mesh(self, mesh: Mesh, title: str = "Mesh", save_path: Optional[str] = None):
-        """Visualize a 3D mesh"""
-        fig = plt.figure(figsize=(10, 8))
-        ax = fig.add_subplot(111, projection='3d')
-        
-        # Get vertex positions
-        positions = mesh.vertex_positions
-        
-        # Plot vertices
-        ax.scatter(positions[:, 0], positions[:, 1], positions[:, 2], 
-                  c='red', s=20, alpha=0.6, label='Vertices')
-        
-        # Plot faces as triangles
-        for face in mesh.faces:
-            if len(face.vertex_indices) >= 3:
-                face_verts = positions[face.vertex_indices[:3]]
-                # Create triangle
-                triangle = np.vstack([face_verts, face_verts[0]])
-                ax.plot(triangle[:, 0], triangle[:, 1], triangle[:, 2], 
-                       'b-', alpha=0.3, linewidth=0.5)
-        
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        ax.set_title(f"{title}\n{len(mesh.vertices)} vertices, {len(mesh.faces)} faces")
-        ax.legend()
-        
-        # Set equal aspect ratio
-        max_range = np.array([positions.max()-positions.min()]).max() / 2.0
-        mid_x = (positions[:, 0].max()+positions[:, 0].min()) * 0.5
-        mid_y = (positions[:, 1].max()+positions[:, 1].min()) * 0.5
-        mid_z = (positions[:, 2].max()+positions[:, 2].min()) * 0.5
-        ax.set_xlim(mid_x - max_range, mid_x + max_range)
-        ax.set_ylim(mid_y - max_range, mid_y + max_range)
-        ax.set_zlim(mid_z - max_range, mid_z + max_range)
-        
-        if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.show()
-    
-    def create_performance_report(self):
-        """Generate a comprehensive performance report"""
-        print("\n📊 Generating Performance Report...")
-        
-        report = {
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'device': str(self.device),
-            'results': self.results
-        }
-        
-        # Save report
-        report_path = Path('mesh_transformers_report.json')
-        with open(report_path, 'w') as f:
-            json.dump(report, f, indent=2, default=str)
-        
-        print(f"✅ Report saved to {report_path}")
-        
-        # Print summary
-        print("\n" + "="*60)
-        print("MESH TRANSFORMERS PERFORMANCE SUMMARY")
-        print("="*60)
-        
-        if 'tokenization' in self.results:
-            print("\nTOKENIZATION:")
-            for name, data in self.results['tokenization'].items():
-                print(f"  {name}: {data['num_tokens']} tokens, "
-                      f"{data['tokenization_time']:.4f}s")
-        
-        if 'models' in self.results:
-            print("\nMODELS:")
-            for name, data in self.results['models'].items():
-                print(f"  {name}: {data['num_parameters']:,} params, "
-                      f"{data['memory_mb']:.1f}MB")
-        
-        if 'benchmark' in self.results:
-            print("\nBENCHMARK:")
-            for data in self.results['benchmark']:
-                print(f"  {data['mesh_name']}: {data['throughput']:.1f} tokens/s")
-        
-        return report
-    
-    def run_comprehensive_demo(self):
-        """Run the complete demonstration suite"""
-        print("🚀 Starting Mesh Transformers Comprehensive Demo")
-        print("=" * 60)
-        
-        # Generate test data
-        meshes = self.generate_sample_meshes(n_samples=5)
-        
-        # Test tokenization
-        self.test_tokenization_strategies(meshes)
-        
-        # Test attention mechanisms
-        self.test_attention_mechanisms()
-        
-        # Test model architectures
-        self.test_model_architectures()
-        
-        # Test augmentation
-        self.test_mesh_augmentation(meshes)
-        
-        # Benchmark performance
-        self.benchmark_performance(meshes)
-        
-        # Visualize sample mesh
-        print("\n🎨 Visualizing Sample Mesh...")
-        self.visualize_mesh(meshes['spheres'][0], "Sample Sphere")
-        
-        # Generate report
-        self.create_performance_report()
-        
-        print("\n✅ Demo completed successfully!")
-
-class MeshClassificationExample:
-    """Example of training a mesh classifier"""
-    
-    def __init__(self):
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
-    def create_synthetic_dataset(self, n_per_class: int = 50):
-        """Create a synthetic mesh classification dataset"""
-        print(f"\n📚 Creating synthetic dataset ({n_per_class} per class)...")
-        
-        dataset = []
-        classes = ['cube', 'sphere', 'cylinder']
-        
-        for class_idx, mesh_type in enumerate(classes):
-            for i in range(n_per_class):
-                if mesh_type == 'cube':
-                    mesh = MeshGenerator.cube(size=np.random.uniform(0.8, 1.5))
-                elif mesh_type == 'sphere':
-                    mesh = MeshGenerator.sphere(
-                        radius=np.random.uniform(0.8, 1.2),
-                        subdivisions=np.random.randint(1, 3)
-                    )
-                else:  # cylinder
-                    mesh = MeshGenerator.cylinder(
-                        radius=np.random.uniform(0.6, 1.0),
-                        height=np.random.uniform(1.5, 2.5),
-                        segments=np.random.randint(12, 24)
-                    )
-                
-                # Normalize and compute normals
+        for class_id in range(num_classes):
+            for sample_id in range(num_samples_per_class):
+                # Generate mesh
+                mesh = mesh_generators[class_id]()
                 mesh.normalize().compute_vertex_normals()
                 
-                # Add to dataset
-                dataset.append({
-                    'mesh': mesh,
-                    'label': class_idx,
-                    'class_name': mesh_type,
-                    'id': f"{mesh_type}_{i}"
+                # Apply random augmentation
+                mesh = self._augment_mesh(mesh)
+                
+                # Tokenize
+                tokens = self.tokenizer.tokenize(mesh)
+                
+                # Limit sequence length
+                if len(tokens) > 512:
+                    tokens = tokens[:512]
+                
+                self.data.append({
+                    'tokens': tokens,
+                    'label': class_id,
+                    'mesh': mesh
                 })
-        
-        print(f"✅ Created dataset with {len(dataset)} samples")
-        return dataset, classes
     
-    def train_simple_classifier(self):
-        """Train a simple mesh classifier"""
-        print("\n🎯 Training Simple Mesh Classifier...")
-        
-        # Create dataset
-        dataset, classes = self.create_synthetic_dataset(n_per_class=20)
-        
-        # Split into train/val
-        np.random.shuffle(dataset)
-        split_idx = int(0.8 * len(dataset))
-        train_data = dataset[:split_idx]
-        val_data = dataset[split_idx:]
-        
-        print(f"Train: {len(train_data)}, Val: {len(val_data)}")
-        
-        # Create simple model and tokenizer
-        tokenizer = VertexTokenizer(include_normals=True, include_colors=False)
-        model = MeshTransformer(
-            feature_dim=6,
-            d_model=128,
-            nhead=4,
-            num_layers=3,
-            dim_feedforward=256
-        ).to(self.device)
-        
-        # Add proper classification head
-        model.classification_head = nn.Sequential(
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(64, len(classes))
-        ).to(self.device)
-        
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-        criterion = nn.CrossEntropyLoss()
-        
-        # Simple training loop
-        model.train()
-        for epoch in range(10):
-            epoch_loss = 0
-            correct = 0
-            total = 0
+    def _augment_mesh(self, mesh: Mesh) -> Mesh:
+        """Simple augmentation"""
+        # Random rotation
+        if np.random.rand() > 0.5:
+            angle = np.random.uniform(-30, 30) * np.pi / 180
+            axis = np.random.randn(3)
+            axis = axis / np.linalg.norm(axis)
             
-            for item in train_data:
-                optimizer.zero_grad()
+            cos_angle = np.cos(angle)
+            sin_angle = np.sin(angle)
+            rotation_matrix = (cos_angle * np.eye(3) + 
+                              sin_angle * np.array([[0, -axis[2], axis[1]],
+                                                  [axis[2], 0, -axis[0]],
+                                                  [-axis[1], axis[0], 0]]) +
+                              (1 - cos_angle) * np.outer(axis, axis))
+            
+            mesh.rotate(rotation_matrix)
+        
+        # Random scale
+        if np.random.rand() > 0.5:
+            scale = np.random.uniform(0.8, 1.2)
+            mesh.scale(scale)
+        
+        # Random noise
+        if np.random.rand() > 0.3:
+            for vertex in mesh.vertices:
+                noise = np.random.normal(0, 0.01, 3)
+                vertex.position += noise
+            mesh._invalidate_caches()
+        
+        return mesh
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+def collate_fn(batch: List[Dict]) -> Dict:
+    """Collate function for batching mesh data"""
+    batch_tokens = [item['tokens'] for item in batch]
+    batch_labels = torch.tensor([item['label'] for item in batch], dtype=torch.long)
+    
+    if len(batch_tokens) == 0:
+        return {
+            'features': torch.empty(0, 0, 6),
+            'positions': torch.empty(0, 0, 3),
+            'attention_mask': torch.empty(0, 0, dtype=torch.bool),
+            'labels': torch.empty(0, dtype=torch.long)
+        }
+    
+    # Get max sequence length
+    max_len = max(len(tokens) for tokens in batch_tokens)
+    if max_len == 0:
+        max_len = 1
+    
+    # Pad sequences
+    padded_features = []
+    padded_positions = []
+    attention_masks = []
+    
+    for tokens in batch_tokens:
+        if len(tokens) == 0:
+            # Handle empty token sequences
+            padded_feat = np.zeros((max_len, 6), dtype=np.float32)
+            padded_pos = np.zeros((max_len, 3), dtype=np.float32)
+            mask = np.zeros(max_len, dtype=bool)
+        else:
+            # Extract features and positions
+            features = np.array([token.features for token in tokens])
+            positions = np.array([token.position for token in tokens])
+            
+            seq_len = len(tokens)
+            
+            # Ensure features have correct dimension (position + normal = 6)
+            if features.shape[1] < 6:
+                # Pad with zeros if missing features
+                padding = np.zeros((seq_len, 6 - features.shape[1]), dtype=np.float32)
+                features = np.concatenate([features, padding], axis=1)
+            elif features.shape[1] > 6:
+                # Truncate if too many features
+                features = features[:, :6]
+            
+            # Pad sequences to max length
+            padded_feat = np.zeros((max_len, 6), dtype=np.float32)
+            padded_pos = np.zeros((max_len, 3), dtype=np.float32)
+            mask = np.zeros(max_len, dtype=bool)
+            
+            padded_feat[:seq_len] = features
+            padded_pos[:seq_len] = positions
+            mask[:seq_len] = True
+        
+        padded_features.append(padded_feat)
+        padded_positions.append(padded_pos)
+        attention_masks.append(mask)
+    
+    return {
+        'features': torch.tensor(np.array(padded_features), dtype=torch.float32),
+        'positions': torch.tensor(np.array(padded_positions), dtype=torch.float32),
+        'attention_mask': torch.tensor(np.array(attention_masks), dtype=torch.bool),
+        'labels': batch_labels
+    }
+
+def train_model():
+    """Complete training function"""
+    
+    # Configuration
+    config = {
+        'device': 'cuda' if torch.cuda.is_available() else 'cpu',
+        'batch_size': 16,
+        'learning_rate': 1e-4,
+        'num_epochs': 50,
+        'num_classes': 3,
+        'feature_dim': 6,  # 3D position + 3D normal
+        'd_model': 128,
+        'nhead': 8,
+        'num_layers': 4,
+        'weight_decay': 0.01,
+        'grad_clip': 1.0
+    }
+    
+    device = torch.device(config['device'])
+    print(f"Using device: {device}")
+    
+    # Create dataset
+    print("Creating dataset...")
+    full_dataset = SimpleMeshDataset(num_samples_per_class=50, num_classes=3)
+    
+    # Split into train/val
+    train_size = int(0.8 * len(full_dataset))
+    val_size = len(full_dataset) - train_size
+    
+    train_data = full_dataset.data[:train_size]
+    val_data = full_dataset.data[train_size:]
+    
+    print(f"Training samples: {len(train_data)}")
+    print(f"Validation samples: {len(val_data)}")
+    
+    # Create data loaders
+    from torch.utils.data import DataLoader
+    
+    class SimpleDataset:
+        def __init__(self, data):
+            self.data = data
+        def __len__(self):
+            return len(self.data)
+        def __getitem__(self, idx):
+            return self.data[idx]
+    
+    train_dataset = SimpleDataset(train_data)
+    val_dataset = SimpleDataset(val_data)
+    
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=config['batch_size'], 
+        shuffle=True, 
+        collate_fn=collate_fn
+    )
+    
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=config['batch_size'], 
+        shuffle=False, 
+        collate_fn=collate_fn
+    )
+    
+    # Create model
+    print("Creating model...")
+    model = create_adaptive_classifier(
+        num_classes=config['num_classes'],
+        d_model=config['d_model'],
+        nhead=config['nhead'],
+        num_layers=config['num_layers']
+    )
+    model.to(device)
+    
+    # Print model info
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total parameters: {total_params:,}")
+    print(f"Trainable parameters: {trainable_params:,}")
+    
+    # Loss and optimizer
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.AdamW(
+        model.parameters(), 
+        lr=config['learning_rate'], 
+        weight_decay=config['weight_decay']
+    )
+    
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, 
+        T_max=config['num_epochs']
+    )
+    
+    # Training loop
+    best_val_acc = 0.0
+    train_losses = []
+    val_accuracies = []
+    
+    print("\nStarting training...")
+    print("=" * 60)
+    
+    for epoch in range(config['num_epochs']):
+        # Training phase
+        model.train()
+        epoch_loss = 0.0
+        num_batches = 0
+        
+        train_pbar = tqdm(train_loader, desc=f'Epoch {epoch+1}/{config["num_epochs"]} [Train]')
+        for batch in train_pbar:
+            optimizer.zero_grad()
+            
+            # Move to device
+            features = batch['features'].to(device)
+            positions = batch['positions'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            labels = batch['labels'].to(device)
+            
+            # Skip empty batches
+            if features.size(0) == 0:
+                continue
+            
+            # Forward pass
+            try:
+                outputs = model(features, positions, attention_mask)
+                loss = criterion(outputs, labels)
                 
-                # Tokenize mesh
-                tokens = tokenizer.tokenize(item['mesh'])
-                if not tokens:
-                    continue
-                
-                # Forward pass
-                output = model(tokens, task='classification')
-                label = torch.tensor([item['label']], device=self.device)
-                
-                # Compute loss
-                loss = criterion(output, label)
+                # Backward pass
                 loss.backward()
+                
+                # Gradient clipping
+                if config['grad_clip'] > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), config['grad_clip'])
+                
                 optimizer.step()
                 
+                # Update metrics
                 epoch_loss += loss.item()
-                pred = torch.argmax(output, dim=1)
-                correct += (pred == label).sum().item()
-                total += 1
-            
-            accuracy = 100 * correct / total if total > 0 else 0
-            print(f"Epoch {epoch+1}: Loss={epoch_loss/len(train_data):.4f}, "
-                  f"Acc={accuracy:.1f}%")
+                num_batches += 1
+                
+                # Update progress bar
+                train_pbar.set_postfix({'loss': f'{loss.item():.4f}'})
+                
+            except Exception as e:
+                print(f"Error in training batch: {e}")
+                continue
         
-        # Validation
+        # Calculate average training loss
+        avg_train_loss = epoch_loss / max(num_batches, 1)
+        train_losses.append(avg_train_loss)
+        
+        # Validation phase
         model.eval()
         val_correct = 0
         val_total = 0
+        val_loss = 0.0
+        val_batches = 0
         
         with torch.no_grad():
-            for item in val_data:
-                tokens = tokenizer.tokenize(item['mesh'])
-                if not tokens:
+            val_pbar = tqdm(val_loader, desc=f'Epoch {epoch+1}/{config["num_epochs"]} [Val]')
+            for batch in val_pbar:
+                # Move to device
+                features = batch['features'].to(device)
+                positions = batch['positions'].to(device)
+                attention_mask = batch['attention_mask'].to(device)
+                labels = batch['labels'].to(device)
+                
+                # Skip empty batches
+                if features.size(0) == 0:
                     continue
                 
-                output = model(tokens, task='classification')
-                label = torch.tensor([item['label']], device=self.device)
-                
-                pred = torch.argmax(output, dim=1)
-                val_correct += (pred == label).sum().item()
-                val_total += 1
+                try:
+                    # Forward pass
+                    outputs = model(features, positions, attention_mask)
+                    loss = criterion(outputs, labels)
+                    
+                    # Predictions
+                    _, predicted = torch.max(outputs.data, 1)
+                    
+                    # Update metrics
+                    val_total += labels.size(0)
+                    val_correct += (predicted == labels).sum().item()
+                    val_loss += loss.item()
+                    val_batches += 1
+                    
+                    # Update progress bar
+                    current_acc = 100 * val_correct / val_total
+                    val_pbar.set_postfix({'acc': f'{current_acc:.2f}%'})
+                    
+                except Exception as e:
+                    print(f"Error in validation batch: {e}")
+                    continue
         
-        val_accuracy = 100 * val_correct / val_total if val_total > 0 else 0
-        print(f"✅ Validation Accuracy: {val_accuracy:.1f}%")
+        # Calculate validation metrics
+        val_accuracy = 100 * val_correct / max(val_total, 1)
+        avg_val_loss = val_loss / max(val_batches, 1)
+        val_accuracies.append(val_accuracy)
         
-        return model, tokenizer, classes
+        # Update learning rate
+        scheduler.step()
+        
+        # Print epoch results
+        print(f"Epoch {epoch+1}/{config['num_epochs']}")
+        print(f"  Train Loss: {avg_train_loss:.4f}")
+        print(f"  Val Loss: {avg_val_loss:.4f}")
+        print(f"  Val Accuracy: {val_accuracy:.2f}%")
+        print(f"  Learning Rate: {scheduler.get_last_lr()[0]:.6f}")
+        
+        # Save best model
+        if val_accuracy > best_val_acc:
+            best_val_acc = val_accuracy
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'val_accuracy': val_accuracy,
+                'config': config
+            }, 'best_mesh_model.pth')
+            print(f"  New best model saved! (Accuracy: {val_accuracy:.2f}%)")
+        
+        print("-" * 60)
+    
+    print(f"\nTraining completed!")
+    print(f"Best validation accuracy: {best_val_acc:.2f}%")
+    
+    # Save final model
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'config': config,
+        'train_losses': train_losses,
+        'val_accuracies': val_accuracies
+    }, 'final_mesh_model.pth')
+    
+    return model, train_losses, val_accuracies
 
-def main():
-    """Main execution function"""
-    print("Mesh Transformers Library - Complete Demo")
-    print("=" * 50)
+def test_single_prediction():
+    """Test the trained model on a single mesh"""
     
-    # Run comprehensive demo
-    demo = MeshTransformersDemo()
-    demo.run_comprehensive_demo()
+    print("\nTesting single prediction...")
     
-    # Run classification example
-    classifier_demo = MeshClassificationExample()
-    model, tokenizer, classes = classifier_demo.train_simple_classifier()
+    # Load the best model
+    if not os.path.exists('best_mesh_model.pth'):
+        print("No trained model found. Please run training first.")
+        return
     
-    print("\n🎉 All demonstrations completed successfully!")
-    print("\nNext steps:")
-    print("- Experiment with different tokenization strategies")
-    print("- Try advanced attention mechanisms")
-    print("- Scale up to larger datasets")
-    print("- Implement custom mesh processing tasks")
+    checkpoint = torch.load('best_mesh_model.pth', map_location='cpu')
+    config = checkpoint['config']
+    
+    # Create model
+    model = create_adaptive_classifier(
+        num_classes=config['num_classes'],
+        d_model=config['d_model'],
+        nhead=config['nhead'],
+        num_layers=config['num_layers']
+    )
+    
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.eval()
+    
+    device = torch.device(config['device'])
+    model.to(device)
+    
+    # Create test meshes
+    test_meshes = {
+        'cube': MeshGenerator.cube(size=1.5),
+        'sphere': MeshGenerator.sphere(radius=1.0, subdivisions=2),
+        'cylinder': MeshGenerator.cylinder(radius=0.8, height=2.0)
+    }
+    
+    tokenizer = VertexTokenizer(include_normals=True, include_colors=False)
+    class_names = ['Cube', 'Sphere', 'Cylinder']
+    
+    print("\nPredictions:")
+    print("-" * 40)
+    
+    with torch.no_grad():
+        for mesh_name, mesh in test_meshes.items():
+            # Preprocess mesh
+            mesh.normalize().compute_vertex_normals()
+            
+            # Tokenize
+            tokens = tokenizer.tokenize(mesh)
+            if len(tokens) > 512:
+                tokens = tokens[:512]
+            
+            if len(tokens) == 0:
+                print(f"{mesh_name}: No tokens generated")
+                continue
+            
+            # Convert to batch format
+            features = np.array([token.features for token in tokens])
+            positions = np.array([token.position for token in tokens])
+            
+            # Ensure correct feature dimension
+            if features.shape[1] < 6:
+                padding = np.zeros((len(tokens), 6 - features.shape[1]), dtype=np.float32)
+                features = np.concatenate([features, padding], axis=1)
+            elif features.shape[1] > 6:
+                features = features[:, :6]
+            
+            # Add batch dimension
+            features = torch.tensor(features, dtype=torch.float32).unsqueeze(0).to(device)
+            positions = torch.tensor(positions, dtype=torch.float32).unsqueeze(0).to(device)
+            mask = torch.ones(1, len(tokens), dtype=torch.bool).to(device)
+            
+            # Predict
+            outputs = model(features, positions, mask)
+            probabilities = torch.softmax(outputs, dim=1)
+            predicted_class = torch.argmax(outputs, dim=1).item()
+            confidence = probabilities[0, predicted_class].item()
+            
+            print(f"{mesh_name:10} -> {class_names[predicted_class]:8} (confidence: {confidence:.3f})")
+            
+            # Show all probabilities
+            print(f"{'':12} Probabilities: ", end="")
+            for i, prob in enumerate(probabilities[0]):
+                print(f"{class_names[i]}: {prob.item():.3f} ", end="")
+            print()
+
+def visualize_training_progress():
+    """Plot training progress if matplotlib is available"""
+    try:
+        import matplotlib.pyplot as plt
+        
+        if not os.path.exists('final_mesh_model.pth'):
+            print("No training data found.")
+            return
+        
+        checkpoint = torch.load('final_mesh_model.pth', map_location='cpu')
+        train_losses = checkpoint['train_losses']
+        val_accuracies = checkpoint['val_accuracies']
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+        
+        # Training loss
+        ax1.plot(train_losses)
+        ax1.set_title('Training Loss')
+        ax1.set_xlabel('Epoch')
+        ax1.set_ylabel('Loss')
+        ax1.grid(True)
+        
+        # Validation accuracy
+        ax2.plot(val_accuracies)
+        ax2.set_title('Validation Accuracy')
+        ax2.set_xlabel('Epoch')
+        ax2.set_ylabel('Accuracy (%)')
+        ax2.grid(True)
+        
+        plt.tight_layout()
+        plt.savefig('training_progress.png')
+        plt.show()
+        
+        print("Training progress saved as 'training_progress.png'")
+        
+    except ImportError:
+        print("Matplotlib not available. Skipping visualization.")
 
 if __name__ == "__main__":
-    main()
+    print("Mesh Transformer Training Example")
+    print("=" * 50)
+    
+    # Train the model
+    try:
+        model, train_losses, val_accuracies = train_model()
+        
+        # Test predictions
+        test_single_prediction()
+        
+        # Visualize progress
+        visualize_training_progress()
+        
+        print("\nTraining and testing completed successfully!")
+        
+    except Exception as e:
+        print(f"Error during training: {e}")
+        import traceback
+        traceback.print_exc()
